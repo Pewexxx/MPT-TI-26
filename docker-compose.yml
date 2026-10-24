@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-promo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-promo}
+      POSTGRES_DB: ${POSTGRES_DB:-promo}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-promo}']
+      interval: 5s
+      retries: 10
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
+    depends_on:
+      db: { condition: service_healthy }
+    ports:
+      - '3000:3000'
+
+  scraper:
+    build: { context: ., dockerfile: apps/scraper/Dockerfile }
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
+      SCRAPE_CRON: ${SCRAPE_CRON:-0 6 * * *}
+    depends_on:
+      db: { condition: service_healthy }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    depends_on: [api]
+    ports:
+      - '8080:80'
+
+volumes:
+  pgdata:
